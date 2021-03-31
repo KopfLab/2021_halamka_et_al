@@ -37,6 +37,10 @@ knitr::opts_chunk$set(
   dev.args = list(pdf = list(encoding = "WinAnsi", useDingbats = FALSE)),
   fig.path = file.path("figures", "")
 )
+
+# output folders
+if (!dir.exists("figures")) dir.create("figures")
+if (!dir.exists("tables")) dir.create("tables")
 ```
 
 # Data Loading & Calculations
