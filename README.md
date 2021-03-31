@@ -1,15 +1,27 @@
-# Template
+# Supporting Information
 
-This is a project template. To use it, click on the green `Use this template` button, select your organization (e.g. `KopfLab`) as the owner (you can transfer it to your account at any point when it's ready to be made public), give it an informative `Repository name` that starts with your initials, and select `Private` to keep the data and analyses within the lab until they are ready for publication. Then hit `Create repository from template` and wait a few seconds for the repository to get generated. In your brand new repository, hit the green `Clone or download` button, and then `Open in Desktop` to synchronize the new repository with your own computer via [GitHub Desktop](https://desktop.github.com/) (you can also do this by command-line if you're familiar with Git).
+This repository holds all supplementary source code needed to reproduce the calculations and plots of Halamka et al. (full citation will follow once published).
 
-# Making it public
+## What can I do with this code? <a href="https://creativecommons.org/licenses/by/4.0/"><img src="https://mirrors.creativecommons.org/presskit/buttons/88x31/png/by.png" align = "right" width = "100"/></a>
 
-To make your entire repository public, go to your repository settings, scroll down to the `Danger Zone` and click on `Make Public`. If you do this, everything in your repository that is synched to github will be publicly available. The `Danger Zone` is also where you can transfer ownership if you want to move your repository out of an organization and into your own account. 
+We hope that this code, or any part of it, might prove useful to other members of the scientific community interested in the subject matter. This repository is released under a [Creative Commons BY (CC-BY)](https://creativecommons.org/licenses/by/4.0/) license, which means all code can be shared and adapted for any purpose as long as appropriate credit is given. See [Attribution section](https://creativecommons.org/licenses/by/4.0/) for details. 
 
-# Generating a website for your repo
+## What is R Markdown?
 
-Alternatively (or in addition), you can make the rendered versions (i.e. HTML files) of your notebooks easily available to the public as a GitHub-hosted (=free) website. This is nice if you want to let people see your fully compiled RMarkdown and Jupyter notebook reports. For an example of what this looks like for this template repository, go to https://www.kopflab.org/project_template/.
+[R Markdown](http://rmarkdown.rstudio.com/) is a so-called "literate programming" format that enables easy creation of dynamic documents with the [R](http://www.r-project.org/) language. HTML and PDF reports can be generated from R Markdown files using [knitr](http://yihui.name/knitr/) and [pandoc](http://johnmacfarlane.net/pandoc/), which can be installed automatically with [RStudio](http://www.rstudio.com/), and are fully integrated into this cross-platform IDE. All software used for these reports (R, RStudio, etc.) is freely available and completely open-source. 
 
-To generate the HTML files, go into the `docs` folder and knit the `docs.Rmd` markdown file (this may or may not work on Windows, sorry). Note that if you are using Jupyter notebooks in a python virtual environment, you have to set the `py_venv` variable in the `docs.Rmd` file. Rendered files of your reports are only (re)generated if they do not yet exist or if the source notebook that created them has changed in any way. If you want to force regeneration of a rendered HTML file, simply delete it from the `docs` directory and re-knit the `docs.Rmd` markdown file. You can also manually add additional HTML files and provide links or other materials in the `index.Rmd` file. 
+## How can I run this code?
 
-To then make the contents of the `docs` directory publicly available (works both in private and public repos!): go to your repository settings and scroll down to `Github Pages` and select `master branch /docs folder` in the `Source` dropdown (this will not affect the rest of your repository, only the `docs` folder, the rest will stay private unless you make the entire repository public). The page will reload and when you scroll back down to the `Github Pages` settings it will show you at what webaddress the contents of your docs directory will be available (for example, http:// http://www.kopflab.org/YOUR_REPOSITORY_NAME/ if your repository is in this organization). Please note that it usually takes a few minutes for the page to be ready when you first switch this on so check back later if the page does not load immediately.
+The quickest and easiest way is to use RStudio.
+
+ 1. Download and install [R](http://cran.rstudio.com/) for your operating system
+ 1. Download and install [RStudio](http://www.rstudio.com/products/rstudio/download/) for your operating system
+ 1. Download a [zip file of this repository](https://github.com/KopfLab/2021_halamka_et_al/archive/master.zip) and unpack it in an easy to find directory on your computer
+ 1. Navigate to the directory and double-click the `project.Rproj` file to start RStudio and load this project.
+ 1. Install the required libraries by running the following command in the Console in RStudio: `install.packages(c("tidyverse", "latex2exp", "cowplot", "ggrepel", "readxl", "openxlsx"))` by installing them manually in RStudio's Packages manager.
+ 1. Open the `analysis.Rmd` notebook in the file browser
+ 1. To generate an HTML report ("knit HTML"), select File --> Knit from the menu. The HTML report will be displayed upon successful completion and is saved as a standalone file in the same directory. All generated data figures are saved as PDF and PNG in the `figures` sub-directory. All generated data tables are saved as XLSX in the `tables` sub-directory.
+ 
+## Troubleshooting notes
+
+The R Markdown files in this repository make use of various R modules for data processing, plotting and modelling. All of these should be installed automatically when the first R Markdown file is knitted (if the knitting fails because of a missing package, please install it manually, an error will indicate which package could not be installed). 
