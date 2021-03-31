@@ -1,0 +1,513 @@
+---
+title: "Analysis and visualization"
+date: "Last knitted on `r format(Sys.Date(), '%d %b %Y')`"
+author: "Toby halamka, Sebastian Kopf"
+output:
+  html_document: 
+    df_print: paged
+    number_sections: no
+    toc: yes
+    toc_float: true
+    toc_depth: 3
+    code_folding: show
+editor_options:
+  chunk_output_type: console
+---
+
+# Libraries & Scripts
+
+```{r setup, include = TRUE, message=FALSE}
+# load libraries
+library(tidyverse) # dplyr, tidyr, ggplot2
+library(cowplot) # multi panel plots
+library(ggrepel) # plot annotation placement
+library(latex2exp) # formatting of plot labels
+library(readxl) # read excel data
+
+# load scripts
+source(file.path("scripts", "growth_functions.R"))
+source(file.path("scripts", "plotting_functions.R"))
+source(file.path("scripts", "table_functions.R"))
+
+# Global Knitting options
+knitr::opts_chunk$set(
+  echo = TRUE, # switch to FALSE to avoid code blocks from displaying
+  dev = c("png", "pdf"), fig.keep = "all",
+  dev.args = list(pdf = list(encoding = "WinAnsi", useDingbats = FALSE)),
+  fig.path = file.path("figures", "")
+)
+```
+
+# Data Loading & Calculations
+
+## Metadata
+
+```{r}
+experiments <- read_excel(file.path("data", "metadata.xlsx"))
+```
+
+## Growth rates
+
+```{r}
+# load data
+growth_curves <- read_excel(file.path("data", "growth_data.xlsx"))
+
+# convert to tidy format
+growth_curves_tidy <- growth_curves %>%
+  # list what to include
+  pivot_longer(matches("^rep\\d"), names_to = "replicate", values_to = "OD") %>% 
+  # mark death phases
+  mark_death_phase(time = time.hours, N = OD, group_by = c(bug_ID, exp_ID, replicate))
+
+# calculate growth rates
+growth_rates <- 
+  growth_curves_tidy %>%
+  filter(!death_phase) %>% 
+  estimate_growth_curve_parameters(
+    time = time.hours, 
+    N = OD,
+    group_by = c(bug_ID, exp_ID, replicate)
+  ) %>%
+  # growth rates from 1/hr to 1/d
+  mutate(r.1_d = r * 24) %>%
+  # add metadata
+  left_join(experiments, by = c("bug_ID", "exp_ID"))
+```
+
+## Lipid abundances
+
+```{r}
+# load data
+fames <- read_excel(file.path("data", "fames_data.xlsx"))
+tetraethers <- read_excel(file.path("data", "tetraether_data.xlsx"))
+
+# convert to tidy format
+fames_tidy <- fames %>%
+  pivot_longer(-c(bug_ID, exp_ID, replicate), names_to = "compound", values_to="amount.ug") %>%
+  mutate(compound = str_remove(compound, fixed(".ug")))
+tetraethers_tidy <- tetraethers %>%
+  pivot_longer(-c(bug_ID, exp_ID, replicate), names_to = "compound", values_to="amount.ng") %>%
+  mutate(
+    compound = str_remove(compound, fixed(".ng")),
+    amount.ug = amount.ng / 1000
+  )
+
+# calculate percentage membrane composition
+lipids <- 
+  bind_rows(
+    mutate(fames_tidy, category = "FAMEs"),
+    mutate(tetraethers_tidy, category = "tetraethers")
+  ) %>%
+  group_by(bug_ID, exp_ID, replicate) %>%
+  mutate(rel_amount = amount.ug/sum(amount.ug, na.rm = TRUE)) %>%
+  ungroup() %>%
+  # add metadata
+  left_join(experiments, by = c("bug_ID", "exp_ID"))
+
+# replicate averages
+lipids_means <-
+  lipids %>%
+  group_by(bug_ID, exp_ID, category, compound) %>%
+  summarize(
+    n = sum(!is.na(rel_amount)),
+    rel_amount_mean = if (n > 0) mean(rel_amount, na.rm = TRUE) else NA_real_,
+    rel_amount_min = if (n > 0) rel_amount_mean - sd(rel_amount, na.rm = TRUE) else NA_real_,
+    rel_amount_max = if (n > 0) rel_amount_mean + sd(rel_amount, na.rm = TRUE) else NA_real_,
+    .groups = "drop"
+  ) %>%
+  # add metadata
+  left_join(experiments, by = c("bug_ID", "exp_ID"))
+```
+
+## MS2 spectra
+
+```{r}
+# load data
+ms2 <- tibble(compound = c("GDGT-1a", "GTGT-1a", "GDGT-1cisomer")) %>%
+  mutate(data = map(compound, ~read_excel("data/ms2_spectra.xlsx", sheet = .x)))
+
+# prepare ms2 data for plotting
+ms2_w_peaks <- 
+  ms2 %>%
+  mutate(compound = as_factor(compound)) %>%
+  unnest(cols = data) %>% 
+  arrange(compound, Mass) %>%
+  # calculate relative intensity
+  group_by(compound) %>%
+  mutate(rel_intensity = Intensity/max(Intensity)) %>% 
+  # find peaks
+  mutate(
+    signal = rel_intensity > 1e-6,
+    peak_nr = cumsum(c(0, diff(signal)) > 0)
+  ) %>% 
+  # identify peak apex intensity
+  group_by(compound, peak_nr) %>%
+  mutate(
+    peak_rel_intensity = ifelse(peak_nr > 0, max(rel_intensity), NA_real_),
+    peak_mass = Mass[rel_intensity == peak_rel_intensity[1]][1]
+  ) %>%
+  ungroup()
+```
+
+## Chromatograms
+
+```{r}
+# load tetraether chromatographic data
+chroms <- 
+  tibble(
+    compound = c("GTGT-1a", "GDGT-1cisomer", "GDGT-1a"),
+    mz = c(1024, 1018, 1022),
+    data = map(
+      compound, 
+      ~readxl::read_excel("data/chroms.xlsx", sheet = .x, col_types = c("numeric", "numeric", "numeric"))
+    )
+  ) %>%
+  unnest(cols = data)
+
+# normalize chromatograms & make tidy
+chroms_norm_tidy <-
+  chroms %>%
+  group_by(compound) %>%
+  mutate(
+    stdnormalized = Intensity_std/max(Intensity_std, na.rm = TRUE),
+    samplenormalized = Intensity_sample/max(Intensity_sample, na.rm = TRUE) 
+  ) %>%
+  ungroup() %>%
+  pivot_longer(cols = matches("normalized"), names_to = "type") %>%
+  filter(!is.na(value))
+```
+
+
+# Visualization
+
+## Figure 1
+
+### Setup
+
+```{r}
+# base_plot
+C_source_levels <- str_replace(unique(sort(growth_rates$`C source`)), "30g", "\n30g")
+
+base_plot <- 
+  ggplot() +
+  aes(x = as.numeric(`C source`)) +
+  geom_vline(xintercept = 1.5, linetype = 2, color = "grey50") +
+  scale_x_continuous(
+    limits = c(0.5, 2.5), expand = c(0, 0), 
+    breaks = c(1,2), labels = function(x) C_source_levels[x]
+  ) + 
+  theme_figure(grid = TRUE, text_size = 20, axis_text_size = 14) +
+  theme(
+    panel.grid.major.x = element_blank(),
+    strip.background.y = element_rect(fill = "grey50"),
+    strip.text.y = element_text(color = "white"),
+    axis.ticks.x = element_blank()
+  ) +
+  labs(x = NULL, y = NULL, fill = NULL, shape = NULL)
+```
+
+
+### Growth rates
+
+```{r "fig1_growth_rates", fig.width=8, fig.height=4, warning=FALSE}
+# growth rates
+gr_plot_data <- 
+  growth_rates %>%
+  filter(near(`% O2`, 1) | near(`% O2`, 21)) %>%
+  group_by(`% O2`, `C source`) %>%
+  summarize(
+    n = sum(r),
+    r.1_d_mean = mean(r.1_d),
+    r.1_d_sd = sd(r.1_d),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(`% O2`), `C source`) %>%
+  mutate(
+    `C source` = factor(str_replace(`C source`, "30g", "\n30g"), levels = C_source_levels),
+    category = "A: growth rates",
+    O2 = sprintf("$%.0f%%\\,O_2$", `% O2`) %>% as_factor(),
+  )
+
+gr_plot <- 
+  base_plot %+% gr_plot_data %+%
+  aes(y = r.1_d_mean, shape = `C source`, ymin = r.1_d_mean - r.1_d_sd, ymax = r.1_d_mean + r.1_d_sd) + 
+  geom_errorbar(width = 0.2/3) + 
+  geom_point(size = 4, color = "black") +
+  scale_y_continuous(NULL, labels = function(x) paste0(x, "/hr")) +
+  facet_grid(category ~ O2, labeller = latex_labeller) +
+  theme(legend.key.height = unit(1, "cm")) + 
+  labs(shape = NULL) +
+  coord_cartesian(ylim = c(0.4, 0.9))
+
+gr_plot
+```
+
+### Tetraether abundances
+
+```{r "fig1_tetraether_abundances", fig.width=8, fig.height=4, warning=FALSE}
+ab_plot_data <- 
+  lipids_means %>%
+  arrange(desc(`% O2`), desc(category), `C source`) %>%
+  filter(
+    near(`% O2`, 1) | near(`% O2`, 21),
+    !str_detect(`C source`, "solid"),
+    str_detect(compound, "br") | compound %in% c("iC15:0", "C16:0", "iDA")
+  ) %>%
+  mutate(
+    `C source` = factor(str_replace(`C source`, "30g", "\n30g"), levels = C_source_levels),
+    O2 = sprintf("$%.0f%%\\,O_2$", `% O2`) %>% as_factor(),
+    compound = factor(
+      compound,
+      levels = c("brGTGT_1a", "brGDGT_1c_isomer", "brGDGT_1a", "iC15:0", "C16:0", "iDA"),
+      labels = c("brGTGT Ia", "brGDGT Ic isomer", "brGDGT Ia", "iso-C15:0", "C16:0", "iso-diabolic acid")
+    )
+  )
+
+brgdgt_ab_plot <- 
+  base_plot %+% 
+  mutate(filter(ab_plot_data, category == "tetraethers"), category = "B: tetraethers") %+%
+  aes(y = rel_amount_mean, fill = compound) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9, preserve = "single")) +
+  geom_errorbar(
+    mapping  = aes(ymin = rel_amount_min, ymax = rel_amount_max), 
+    position = position_dodge(width = 0.9, preserve = "single"), width = 0.2, color = "black"
+  ) +
+  facet_grid(category ~ O2, scales = "free_y", labeller = latex_labeller, drop = FALSE) +
+  scale_y_continuous(NULL, expand = expansion(mult = c(0, 0.03)), labels = scales::percent) +
+  scale_fill_manual(NULL, values = c("#009E73", "#0072B2", "#E69F00"))
+
+brgdgt_ab_plot
+```
+
+### FAME abundances
+
+```{r "fig1_FAME_abundances", fig.width=8, fig.height=4, warning=FALSE}
+fames_ab_plot <- 
+  base_plot %+% 
+  mutate(filter(ab_plot_data, category == "FAMEs"), category = "C: FAMEs") %+%
+  aes(y = rel_amount_mean, fill = compound) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9, preserve = "single")) +
+  geom_errorbar(
+     mapping  = aes(ymin = rel_amount_min, ymax = rel_amount_max), 
+     position = position_dodge(width = 0.9, preserve = "single"), width = 0.2, color = "black"
+  ) +
+  facet_grid(category ~ O2, scales = "free_y", labeller = latex_labeller, switch = "x") +
+  scale_y_continuous(NULL, expand = expansion(mult = c(0, 0.03)), labels = scales::percent) +
+  scale_fill_manual(NULL, values = c("#F0E442", "#D55E00", "#CC79A7"))
+
+fames_ab_plot
+```
+
+
+### Combined
+
+```{r "fig1_combined", fig.width=8, fig.height=8, warning=FALSE}
+plot_grid(
+  gr_plot + theme(
+    axis.text.x = element_blank(), axis.title.x = element_blank(), axis.ticks.x = element_blank()
+  ), 
+  brgdgt_ab_plot + theme(
+    axis.text.x = element_blank(), axis.title.x = element_blank(), axis.ticks.x = element_blank(),
+    strip.background.x = element_blank(), strip.text.x = element_blank()
+  ),
+  fames_ab_plot, 
+  align = "v", ncol = 1, axis = "lr", rel_heights = c(0.9, 1, 1.2)
+)
+```
+
+## Figure 2
+
+### Setup
+
+```{r "ms2_setup"}
+# define font_size
+font_size = 5
+
+# define colors
+colors <- 
+  tibble(
+    compound = c("GDGT-1a", "GTGT-1a", "GDGT-1cisomer", "black"),
+    color = as_factor(c("#E69F00", "#009E73", "#0072B2", "black"))
+  )
+
+# load peaks to highlight
+peaks <- readxl::read_excel("data/ms2_fragments.xlsx") %>%
+  filter(!is.na(include) & include) %>%
+  mutate(order = row_number()) %>%
+  pivot_longer(cols = c(label, formula), values_to = "label") %>%
+  filter(!is.na(label), nchar(label) > 0) %>%
+  mutate(
+    label_compound = ifelse(name == "formula", "black", label_compound),
+    peak_join_mass = sprintf("%.1f", peak),
+    label = str_replace_all(label, "-", "\\\\,-"),
+    label_tex = 
+      ifelse(
+        name == "formula",
+        sprintf("$%s:\\,%s$", peak_join_mass, label),
+        sprintf("$\\[%s\\]^+$", label)
+      ) %>% latex2exp::TeX() %>% as.character()
+  )
+
+# process peaks to generate peak labels
+peak_labels <- ms2_w_peaks %>%
+  mutate(peak_join_mass = sprintf("%.1f", peak_mass)) %>%
+  left_join(peaks, by = "peak_join_mass") %>% 
+  filter(peak_nr > 0, !is.na(label_compound), label_compound == compound | label_compound == "black") %>%
+  #filter( {{ mass_filter_expr }}) %>%
+  #filter( {{ peak_filter_expr }}) %>%
+  arrange(desc(name), desc(order)) %>%
+  select(compound = label_compound, peak_join_mass, peak_mass, peak_rel_intensity, label_tex) %>%
+  # calculate base position for label above top peak
+  group_by(peak_join_mass) %>%
+  mutate(peak_rel_intensity = max(peak_rel_intensity), peak_mass = mean(peak_mass)) %>%
+  unique() %>%
+  mutate(y_offset = 0:(n() - 1)) %>%
+  ungroup() %>%
+  # add colors
+  left_join(colors, by = "compound")
+
+# base plot
+p <- ms2_w_peaks %>%
+  # add colors 
+  left_join(colors, by = "compound") %>%
+  # select overall mass range to show
+  filter(Mass >= 290, Mass <= 1050) %>%
+  ggplot() +
+  geom_line(aes(x = Mass, y = rel_intensity, color = color), size = 1) +
+  # pick the colors for the 3 compounds
+  scale_color_identity(drop = FALSE) +
+  scale_x_continuous(expand = c(0, 0), breaks = (0:10)*100) +
+  theme_figure(grid = FALSE, legend = FALSE) +
+  expand_limits(x = 1050) +
+  labs(x = "mass", y = "relative intensity")
+```
+
+### MS2 bottom
+
+```{r "fig2_ms2_bottom", fig.width=16, fig.height=6, warning=FALSE}
+# bottom part add the mass highlights
+p_bottom <- p +
+  # tweak to adjust label spacing and offsets
+  geom_text(
+    data = filter(peak_labels, peak_rel_intensity < 0.5),
+    mapping = aes(x = peak_mass, y = peak_rel_intensity + y_offset * 0.005, label = label_tex, color = color), 
+    parse = TRUE, hjust = 0, nudge_y = 0.005, nudge_x = -2,
+    size = 5
+  )
+p_bottom + coord_cartesian(ylim = c(0, 0.22))
+```
+
+### MS2 top
+
+```{r "fig2_ms2_top", fig.width=16, fig.height=6, warning=FALSE}
+# top part without mass highlights
+p_top <- p +
+  # tweak to adjust label spacing and offsets
+  geom_text_repel(
+    data = filter(peak_labels, peak_rel_intensity > 0.5),
+    mapping = aes(x = peak_mass, y = peak_rel_intensity + y_offset * 0.02, label = label_tex, color = color), 
+    parse = TRUE, hjust = 1, #nudge_y = -0.03, nudge_x = -10,
+    force = 1, min.segment.length = 0, segment.colour = "gray", nudge_y = -0.05, nudge_x = -50,
+    size = 5
+  )
+p_top + coord_cartesian(ylim = c(0.74, 1.02))
+```
+
+### MS2 combined
+
+```{r "fig2_ms2_combined", fig.width=16, fig.height=12, warning=FALSE}
+# combine plots
+plot_with_y_gap(
+  # plots
+  pb = p_bottom, pt = p_top,
+  # data segments to plot
+  pb_ylim = c(0, 0.22), pb_breaks = c(0, 5, 10, 15, 20)/100,
+  pt_ylim = c(0.74, 1.02), pt_breaks = c(0.80, 1.00), pt_gap_marker_width = 0.4,
+  labels = function(x) paste0(100*x, "%"),
+  # proportions
+  pb_relative_size = 4, pt_relative_size = 1
+)
+```
+
+### Chromatogram
+
+```{r "fig2_chromatogram", fig.width=6, fig.height=6}
+# define colors
+colors <- 
+  tibble(
+    compound = c("GDGT-1a", "GTGT-1a", "GDGT-1cisomer"),
+    color = c("#E69F00", "#009E73", "#0072B2")
+  ) %>% 
+  crossing(type = c("samplenormalized", "stdnormalized")) %>%
+  mutate(
+    compound_type = paste(compound, type),
+    color = ifelse(type == "stdnormalized", "thistle4", color) %>% as_factor()
+  )
+
+# plot
+chroms_norm_tidy %>%
+  # use as_factor to preserve order in panels and legends
+  mutate(
+    compound = as_factor(compound),
+    mz = as_factor(sprintf("m/z = %.0f", mz)),
+    compound_type = paste(compound, type)
+  ) %>%
+  left_join(select(colors, compound_type, color), by = "compound_type") %>%
+  ggplot() +
+  aes(x = Time, y = value, color = color) +
+  # data
+  geom_line(size = 1.05) +
+  # x acis breaks
+  scale_x_continuous(breaks = c(30, 35, 40, 45, 50, 55)) + 
+  # y axis starts at 0 but goes slightly above the max
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  # manual color scale - every other is a standard
+  scale_color_identity() +
+  # plot all in one using a facet grid
+  facet_grid(mz ~ .) +
+  # always use this for easy defaults
+  theme_figure(grid = FALSE) +
+  # additionally disable the y axis ticks and legend
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.position = "none"
+  ) +
+  # all labels in one
+  labs(y = "Intensity (normalized)", x = "Time (minutes)")
+```
+
+# Tables
+
+## Dataset S1
+
+```{r}
+# lipids data table
+lipids_table <- 
+  lipids %>%
+  arrange(desc(`% O2`), `C source`, replicate) %>%
+  select(organism = bug_ID, `% O2`, `C source`, replicate, compound, rel_amount) %>%
+  pivot_wider(names_from = compound, values_from = rel_amount) %>%
+  select(
+    organism, `% O2`:replicate, 
+    `C8:0`, `C14:0`, `iso-C15:0` = `iC15:0`, `C15:0`, `C16:1`, `C16:0`, `iso-C17:0` = `iC17:0`, `C17:1`, 
+    `C17:0`, `C18:1`, `C18:0`, `C20:0`, `C22:0`, squalene, `iso-diabolic acid` = iDA,
+    `brGDGT Ia` = brGDGT_1a, `brGDGT Ic isomer` = brGDGT_1c_isomer, `brGTGT Ia` = brGTGT_1a,
+    everything()
+  ) %>%
+  mutate(`% O2` = sprintf("%.0f", `% O2`))
+lipids_table %>% knitr::kable()
+
+# growth rates data table
+gr_table <- growth_rates %>%
+  arrange(desc(`% O2`), `C source`, replicate) %>%
+  select(organism = bug_ID, `% O2`, `C source`, replicate, `growth rate [1/d]` = r.1_d, `K [OD600]` = K) %>%
+  mutate(`% O2` = sprintf("%.0f", `% O2`))
+
+# export
+wb <- openxlsx::createWorkbook()
+add_excel_sheet(wb, "lipid data", lipids_table, dbl_format = "PERCENTAGE")
+add_excel_sheet(wb, "growth data", gr_table)
+openxlsx::saveWorkbook(wb, "tables/dataset_S1.xlsx", overwrite = TRUE)
+```
+
