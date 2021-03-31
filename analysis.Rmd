@@ -23,6 +23,7 @@ library(cowplot) # multi panel plots
 library(ggrepel) # plot annotation placement
 library(latex2exp) # formatting of plot labels
 library(readxl) # read excel data
+library(openxlsx) # write tables in excel format
 
 # load scripts
 source(file.path("scripts", "growth_functions.R"))
