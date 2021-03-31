@@ -1,4 +1,4 @@
-# Supporting Information
+# Supporting Information [![DOI](https://zenodo.org/badge/353106851.svg)](https://zenodo.org/badge/latestdoi/353106851)
 
 This repository holds all supplementary source code needed to reproduce the calculations and plots of Halamka et al. (full citation will follow once published).
 
