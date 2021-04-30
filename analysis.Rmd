@@ -185,7 +185,7 @@ chroms_norm_tidy <-
 
 # Visualization
 
-## Figure 1
+## Figure 1: growth rates & lipid abundances
 
 ### Setup
 
@@ -236,15 +236,14 @@ gr_plot_data <-
 gr_plot <- 
   base_plot %+% gr_plot_data %+%
   aes(y = r.1_d_mean, shape = `C source`, ymin = r.1_d_mean - r.1_d_sd, ymax = r.1_d_mean + r.1_d_sd) + 
-  geom_errorbar(width = 0.2/3) + 
-  geom_point(size = 4, color = "black") +
+  geom_errorbar(width = 0) + 
   scale_y_continuous(NULL, labels = function(x) paste0(x, "/hr")) +
   facet_grid(category ~ O2, labeller = latex_labeller) +
   theme(legend.key.height = unit(1, "cm")) + 
   labs(shape = NULL) +
-  coord_cartesian(ylim = c(0.4, 0.9))
+  coord_cartesian(ylim = c(0.4, 1.0))
 
-gr_plot
+gr_plot + geom_point(size = 4, color = "black")
 ```
 
 ### Tetraether abundances
@@ -275,10 +274,10 @@ brgdgt_ab_plot <-
   geom_bar(stat = "identity", position = position_dodge(width = 0.9, preserve = "single")) +
   geom_errorbar(
     mapping  = aes(ymin = rel_amount_min, ymax = rel_amount_max), 
-    position = position_dodge(width = 0.9, preserve = "single"), width = 0.2, color = "black"
+    position = position_dodge(width = 0.9, preserve = "single"), width = 0, color = "black"
   ) +
   facet_grid(category ~ O2, scales = "free_y", labeller = latex_labeller, drop = FALSE) +
-  scale_y_continuous(NULL, expand = expansion(mult = c(0, 0.03)), labels = scales::percent) +
+  scale_y_continuous(NULL, breaks = c(0.005, 0.015, 0.025), expand = expansion(mult = c(0, 0.03)), labels = scales::percent) +
   scale_fill_manual(NULL, values = c("#009E73", "#0072B2", "#E69F00"))
 
 brgdgt_ab_plot
@@ -294,11 +293,11 @@ fames_ab_plot <-
   geom_bar(stat = "identity", position = position_dodge(width = 0.9, preserve = "single")) +
   geom_errorbar(
      mapping  = aes(ymin = rel_amount_min, ymax = rel_amount_max), 
-     position = position_dodge(width = 0.9, preserve = "single"), width = 0.2, color = "black"
+     position = position_dodge(width = 0.9, preserve = "single"), width = 0, color = "black"
   ) +
   facet_grid(category ~ O2, scales = "free_y", labeller = latex_labeller, switch = "x") +
-  scale_y_continuous(NULL, expand = expansion(mult = c(0, 0.03)), labels = scales::percent) +
-  scale_fill_manual(NULL, values = c("#F0E442", "#D55E00", "#CC79A7"))
+  scale_y_continuous(NULL, breaks = c(0.1, 0.3, 0.5, 0.7), expand = expansion(mult = c(0, 0.03)), labels = scales::percent) +
+  scale_fill_manual(NULL, values = c("#FCDE05", "#FF5473", "#A696FF"))
 
 fames_ab_plot
 ```
@@ -307,20 +306,62 @@ fames_ab_plot
 ### Combined
 
 ```{r "fig1_combined", fig.width=8, fig.height=8, warning=FALSE}
+# big version
+gr_plot_top <- gr_plot + 
+  theme(
+    axis.text.x = element_blank(), 
+    axis.title.x = element_blank(), 
+    axis.ticks.x = element_blank()
+  )
+
+brgdgt_ab_plot_middle <- 
+  brgdgt_ab_plot + 
+  theme(
+    axis.text.x = element_blank(), 
+    axis.title.x = element_blank(), 
+    axis.ticks.x = element_blank(),
+    strip.background.x = element_blank(), 
+    strip.text.x = element_blank()
+  )
+
+fames_ab_plot_bottom <-
+  fames_ab_plot +
+  theme(
+    strip.background.x = element_blank(), 
+    strip.text.x = element_blank()
+  )
+
 plot_grid(
-  gr_plot + theme(
-    axis.text.x = element_blank(), axis.title.x = element_blank(), axis.ticks.x = element_blank()
-  ), 
-  brgdgt_ab_plot + theme(
-    axis.text.x = element_blank(), axis.title.x = element_blank(), axis.ticks.x = element_blank(),
-    strip.background.x = element_blank(), strip.text.x = element_blank()
-  ),
-  fames_ab_plot, 
+  gr_plot_top + geom_point(size = 4, color = "black"), 
+  brgdgt_ab_plot_middle, fames_ab_plot_bottom, 
   align = "v", ncol = 1, axis = "lr", rel_heights = c(0.9, 1, 1.2)
 )
 ```
 
-## Figure 2
+```{r "fig1_combined_small_no_legend", fig.width=2.36, fig.height=3.15, warning=FALSE}
+# small version
+small_theme <- 
+  theme(
+    legend.position = "none", 
+    text = element_text(size = 8),
+    axis.text = element_text(size = 8),
+    strip.text = element_text(size = 8),
+    plot.margin = margin(t = 0, b = 0),
+    panel.spacing.x = unit(1, "pt")
+  )
+
+plot_grid(
+  gr_plot_top + small_theme + geom_point(size = 2, color = "black") + 
+    theme(plot.margin = margin(t = 1)), 
+  brgdgt_ab_plot_middle + small_theme, 
+  fames_ab_plot_bottom + small_theme + theme(
+    axis.text.x = element_text(size = 6)
+  ), 
+  align = "v", ncol = 1, axis = "lr", rel_heights = c(1.15, 0.95, 1.2)
+)
+```
+
+## Figure 2: tetraether structures
 
 ### Setup
 
@@ -482,9 +523,32 @@ chroms_norm_tidy %>%
   labs(y = "Intensity (normalized)", x = "Time (minutes)")
 ```
 
+## Figure S1: growth curves
+
+```{r "figS1_growth_curves", fig.width = 10, fig.height = 6.5}
+ggplot() + 
+  aes(x = time.hours, y = OD, color = replicate) +
+  geom_line(
+    data = generate_logistic_curve(growth_rates, time = time.hours, N = OD) %>%
+       mutate(panel = sprintf("%s: %.0f%% O2\n%s", bug_ID, `% O2`, `C source`) %>% as_factor())
+  ) +
+  geom_point(
+    data = growth_curves_tidy %>%
+      left_join(experiments, by = c("bug_ID", "exp_ID")) %>%
+      mutate(panel = sprintf("%s: %.0f%% O2\n%s", bug_ID, `% O2`, `C source`) %>% as_factor())
+  ) + 
+  scale_color_brewer(palette = "Set1") +
+  facet_wrap(~panel, scales = "free") +
+  theme_figure(text_size = 14) +
+  labs(x = "Time [hours]")
+```
+
+
 # Tables
 
 ## Dataset S1
+
+### lipid data
 
 ```{r}
 # lipids data table
@@ -502,13 +566,22 @@ lipids_table <-
   ) %>%
   mutate(`% O2` = sprintf("%.0f", `% O2`))
 lipids_table %>% knitr::kable()
+```
 
+### growth data
+
+```{r}
 # growth rates data table
 gr_table <- growth_rates %>%
   arrange(desc(`% O2`), `C source`, replicate) %>%
   select(organism = bug_ID, `% O2`, `C source`, replicate, `growth rate [1/d]` = r.1_d, `K [OD600]` = K) %>%
   mutate(`% O2` = sprintf("%.0f", `% O2`))
+gr_table %>% knitr::kable()
+```
 
+### export
+
+```{r}
 # export
 wb <- openxlsx::createWorkbook()
 add_excel_sheet(wb, "lipid data", lipids_table, dbl_format = "PERCENTAGE")
