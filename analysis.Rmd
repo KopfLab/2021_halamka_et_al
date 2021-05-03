@@ -546,9 +546,7 @@ ggplot() +
 
 # Tables
 
-## Dataset S1
-
-### lipid data
+## Table S1: lipid data
 
 ```{r}
 # lipids data table
@@ -565,27 +563,18 @@ lipids_table <-
     everything()
   ) %>%
   mutate(`% O2` = sprintf("%.0f", `% O2`))
+lipids_table %>% export_to_excel(file = "tables/table_S1.xlsx", dbl_format = "PERCENTAGE")
 lipids_table %>% knitr::kable()
 ```
 
-### growth data
+### Table S2: growth data
 
-```{r}
+```{r, warning=FALSE}
 # growth rates data table
 gr_table <- growth_rates %>%
   arrange(desc(`% O2`), `C source`, replicate) %>%
   select(organism = bug_ID, `% O2`, `C source`, replicate, `growth rate [1/d]` = r.1_d, `K [OD600]` = K) %>%
   mutate(`% O2` = sprintf("%.0f", `% O2`))
+gr_table %>% export_to_excel(file = "tables/table_S2.xlsx")
 gr_table %>% knitr::kable()
 ```
-
-### export
-
-```{r}
-# export
-wb <- openxlsx::createWorkbook()
-add_excel_sheet(wb, "lipid data", lipids_table, dbl_format = "PERCENTAGE")
-add_excel_sheet(wb, "growth data", gr_table)
-openxlsx::saveWorkbook(wb, "tables/dataset_S1.xlsx", overwrite = TRUE)
-```
-
