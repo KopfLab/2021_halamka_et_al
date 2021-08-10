@@ -363,32 +363,69 @@ plot_grid(
 
 ## Figure 2: tetraether structures
 
-### Setup
+### Spectra 
 
-```{r "ms2_setup"}
-# define font_size
-font_size = 5
-
+```{r "fig2_spectra_without_labels", fig.width=12, fig.height=12}
 # define colors
-colors <- 
-  tibble(
-    compound = c("GDGT-1a", "GTGT-1a", "GDGT-1cisomer", "black"),
-    color = as_factor(c("#E69F00", "#009E73", "#0072B2", "black"))
-  )
+ms_colors <- 
+  tribble(
+    ~compound,       ~type, ~color,
+    "GDGT-1a",       "label", "#E69F00",
+    "GDGT-1cisomer", "label", "#0072B2",
+    "GTGT-1a",       "label", "#009E73",
+    "GDGT-1a",       "formula", "black",
+    "GDGT-1cisomer", "formula", "black",
+    "GTGT-1a",       "formula", "black"
+  ) %>%
+  mutate(compound = as_factor(compound))
 
+# add colors to ms2 and pick overall mass range
+ms2_w_colors <- ms2_w_peaks %>%
+  # keep order from the colors table
+  mutate(compound = factor(compound, levels = levels(ms_colors$compound))) %>%
+  # add colors 
+  left_join(filter(ms_colors, type == "label"), by = "compound") %>%
+  # select overall mass range to show
+  filter(Mass >= 290, Mass <= 1050) 
+
+# adjust to change the max shown on the y axis
+max_y <- 0.18
+
+# spectra plot
+spectra_plot_without_labels <- 
+  ms2_w_colors %>%
+  ggplot() +
+  # lines
+  geom_line(aes(x = Mass, y = rel_intensity, color = color), size = 1.5) +
+  # scales
+  scale_color_identity(drop = FALSE) +
+  scale_x_continuous(expand = c(0, 0), breaks = (0:10)*100) +
+  scale_y_continuous(labels = function(x) paste0(100*x, "%")) +
+  coord_cartesian(ylim = c(0.01, max_y)) +
+  # facet
+  facet_grid(compound ~ .) +
+  # theme
+  theme_figure(grid = FALSE, legend = FALSE) +
+  expand_limits(x = 1050) + 
+  # labels
+  labs(x = "mass", y = "relative intensity")
+
+spectra_plot_without_labels
+```
+
+```{r "fig2_spectra", fig.width=12, fig.height=12}
 # load peaks to highlight
 peaks <- readxl::read_excel("data/ms2_fragments.xlsx") %>%
   filter(!is.na(include) & include) %>%
   mutate(order = row_number()) %>%
-  pivot_longer(cols = c(label, formula), values_to = "label") %>%
+  pivot_longer(cols = c(label, formula), names_to = "type", values_to = "label") %>%
   filter(!is.na(label), nchar(label) > 0) %>%
   mutate(
-    label_compound = ifelse(name == "formula", "black", label_compound),
     peak_join_mass = sprintf("%.1f", peak),
     label = str_replace_all(label, "-", "\\\\,-"),
     label_tex = 
       ifelse(
-        name == "formula",
+        type == "formula",
         sprintf("$%s:\\,%s$", peak_join_mass, label),
         sprintf("$\\[%s\\]^+$", label)
       ) %>% latex2exp::TeX() %>% as.character()
@@ -398,107 +435,68 @@ peaks <- readxl::read_excel("data/ms2_fragments.xlsx") %>%
 peak_labels <- ms2_w_peaks %>%
   mutate(peak_join_mass = sprintf("%.1f", peak_mass)) %>%
   left_join(peaks, by = "peak_join_mass") %>% 
-  filter(peak_nr > 0, !is.na(label_compound), label_compound == compound | label_compound == "black") %>%
-  #filter( {{ mass_filter_expr }}) %>%
-  #filter( {{ peak_filter_expr }}) %>%
-  arrange(desc(name), desc(order)) %>%
-  select(compound = label_compound, peak_join_mass, peak_mass, peak_rel_intensity, label_tex) %>%
+  filter(peak_nr > 0, !is.na(label_compound), label_compound == compound) %>%
+  arrange(desc(type), desc(order)) %>%
+  select(compound = label_compound, type, molecular_ion, 
+         peak_join_mass, peak_mass, peak_rel_intensity, label_tex) %>%
   # calculate base position for label above top peak
-  group_by(peak_join_mass) %>%
+  group_by(compound, peak_join_mass) %>%
   mutate(peak_rel_intensity = max(peak_rel_intensity), peak_mass = mean(peak_mass)) %>%
   unique() %>%
   mutate(y_offset = 0:(n() - 1)) %>%
   ungroup() %>%
+  # keep order from the colors table
+  mutate(compound = factor(compound, levels = levels(ms_colors$compound))) %>%
   # add colors
-  left_join(colors, by = "compound")
+  left_join(ms_colors, by = c("compound", "type"))
 
-# base plot
-p <- ms2_w_peaks %>%
-  # add colors 
-  left_join(colors, by = "compound") %>%
-  # select overall mass range to show
-  filter(Mass >= 290, Mass <= 1050) %>%
-  ggplot() +
-  geom_line(aes(x = Mass, y = rel_intensity, color = color), size = 1) +
-  # pick the colors for the 3 compounds
-  scale_color_identity(drop = FALSE) +
-  scale_x_continuous(expand = c(0, 0), breaks = (0:10)*100) +
-  theme_figure(grid = FALSE, legend = FALSE) +
-  expand_limits(x = 1050) +
-  labs(x = "mass", y = "relative intensity")
-```
-
-### MS2 bottom
-
-```{r "fig2_ms2_bottom", fig.width=16, fig.height=6, warning=FALSE}
-# bottom part add the mass highlights
-p_bottom <- p +
-  # tweak to adjust label spacing and offsets
-  geom_text(
-    data = filter(peak_labels, peak_rel_intensity < 0.5),
-    mapping = aes(x = peak_mass, y = peak_rel_intensity + y_offset * 0.005, label = label_tex, color = color), 
-    parse = TRUE, hjust = 0, nudge_y = 0.005, nudge_x = -2,
-    size = 5
-  )
-p_bottom + coord_cartesian(ylim = c(0, 0.22))
-```
-
-### MS2 top
-
-```{r "fig2_ms2_top", fig.width=16, fig.height=6, warning=FALSE}
-# top part without mass highlights
-p_top <- p +
-  # tweak to adjust label spacing and offsets
+# make plot with labels
+spectra_plot <- spectra_plot_without_labels +
+   # labels
   geom_text_repel(
-    data = filter(peak_labels, peak_rel_intensity > 0.5),
-    mapping = aes(x = peak_mass, y = peak_rel_intensity + y_offset * 0.02, label = label_tex, color = color), 
-    parse = TRUE, hjust = 1, #nudge_y = -0.03, nudge_x = -10,
-    force = 1, min.segment.length = 0, segment.colour = "gray", nudge_y = -0.05, nudge_x = -50,
-    size = 5
-  )
-p_top + coord_cartesian(ylim = c(0.74, 1.02))
+    data = function(df) filter(peak_labels, compound %in% unique(df$compound)),
+    mapping = 
+      aes(
+        x = peak_mass,
+        y = ifelse(molecular_ion, max_y - 0.01, peak_rel_intensity), # + y_offset * 0.01, 
+        hjust = ifelse(peak_mass > 900, 1, 0),
+        vjust = ifelse(molecular_ion, 1, 0),
+        label = label_tex, color = color
+      ), 
+    size = 4, parse = TRUE, nudge_y = 0.1, 
+    seed = 42, min.segment.length = 0, force = 4
+  ) 
+
+spectra_plot
 ```
 
-### MS2 combined
+### Chromatograms
 
-```{r "fig2_ms2_combined", fig.width=16, fig.height=12, warning=FALSE}
-# combine plots
-plot_with_y_gap(
-  # plots
-  pb = p_bottom, pt = p_top,
-  # data segments to plot
-  pb_ylim = c(0, 0.22), pb_breaks = c(0, 5, 10, 15, 20)/100,
-  pt_ylim = c(0.74, 1.02), pt_breaks = c(0.80, 1.00), pt_gap_marker_width = 0.4,
-  labels = function(x) paste0(100*x, "%"),
-  # proportions
-  pb_relative_size = 4, pt_relative_size = 1
-)
-```
-
-### Chromatogram
-
-```{r "fig2_chromatogram", fig.width=6, fig.height=6}
+```{r "fig2_chromatograms", fig.width=6, fig.height=6}
 # define colors
-colors <- 
+chroms_colors <- 
   tibble(
+    # the order here determines panel and legend order
     compound = c("GDGT-1a", "GTGT-1a", "GDGT-1cisomer"),
     color = c("#E69F00", "#009E73", "#0072B2")
   ) %>% 
   crossing(type = c("samplenormalized", "stdnormalized")) %>%
   mutate(
     compound_type = paste(compound, type),
-    color = ifelse(type == "stdnormalized", "thistle4", color) %>% as_factor()
+    color = ifelse(type == "stdnormalized", "thistle4", color) %>% as_factor(),
+    compound = as_factor(compound)
   )
 
 # plot
-chroms_norm_tidy %>%
-  # use as_factor to preserve order in panels and legends
+chroms_plot <- chroms_norm_tidy %>%
+  # use as_factor to copy order in panels and legends
+  mutate(compound = factor(compound, levels = levels(chroms_colors$compound))) %>%
+  arrange(compound) %>%
   mutate(
-    compound = as_factor(compound),
     mz = as_factor(sprintf("m/z = %.0f", mz)),
     compound_type = paste(compound, type)
   ) %>%
-  left_join(select(colors, compound_type, color), by = "compound_type") %>%
+  left_join(select(chroms_colors, compound_type, color), by = "compound_type") %>%
   ggplot() +
   aes(x = Time, y = value, color = color) +
   # data
@@ -521,13 +519,37 @@ chroms_norm_tidy %>%
   ) +
   # all labels in one
   labs(y = "Intensity (normalized)", x = "Time (minutes)")
+
+chroms_plot
+```
+
+### Combined
+
+```{r "fig2_combined_without_labels", fig.width=14, fig.height=12, warning=FALSE}
+plot_grid(
+  spectra_plot_without_labels + 
+    theme(strip.background = element_blank(), strip.text = element_blank()) +
+    labs(y = NULL),
+  chroms_plot, 
+  align = "h", ncol = 2, axis = "bt", rel_widths = c(4, 3)
+)
+```
+
+```{r "fig2_combined", fig.width=14, fig.height=12, warning=FALSE}
+plot_grid(
+  spectra_plot + 
+    theme(strip.background = element_blank(), strip.text = element_blank()) +
+    labs(y = NULL),
+  chroms_plot, 
+  align = "h", ncol = 2, axis = "bt", rel_widths = c(4, 3)
+)
 ```
 
 ## Figure S1: growth curves
 
 ```{r "figS1_growth_curves", fig.width = 10, fig.height = 6.5}
 ggplot() + 
-  aes(x = time.hours, y = OD, color = replicate) +
+  aes(x = time.hours/24, y = OD, color = replicate) +
   geom_line(
     data = generate_logistic_curve(growth_rates, time = time.hours, N = OD) %>%
        mutate(panel = sprintf("%s: %.0f%% O2\n%s", bug_ID, `% O2`, `C source`) %>% as_factor())
@@ -540,9 +562,8 @@ ggplot() +
   scale_color_brewer(palette = "Set1") +
   facet_wrap(~panel, scales = "free") +
   theme_figure(text_size = 14) +
-  labs(x = "Time [hours]")
+  labs(x = "Time [days]")
 ```
-
 
 # Tables
 
@@ -567,7 +588,7 @@ lipids_table %>% export_to_excel(file = "tables/table_S1.xlsx", dbl_format = "PE
 lipids_table %>% knitr::kable()
 ```
 
-### Table S2: growth data
+## Table S2: growth data
 
 ```{r, warning=FALSE}
 # growth rates data table
