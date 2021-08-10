@@ -1,6 +1,6 @@
 [![DOI](https://zenodo.org/badge/353106851.svg)](https://zenodo.org/badge/latestdoi/353106851)
 
-# Halamka et al. (2011) supplemental
+# Halamka et al. (2021) supplemental
 
 This repository holds all data and supplementary source code needed to reproduce the calculations and plots of Halamka et al. (full citation will follow once published).
 
