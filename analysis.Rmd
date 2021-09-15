@@ -1,7 +1,7 @@
 ---
 title: "Analysis and visualization"
 date: "Last knitted on `r format(Sys.Date(), '%d %b %Y')`"
-author: "Toby halamka, Sebastian Kopf"
+author: "Toby Halamka, Sebastian Kopf"
 output:
   html_document: 
     df_print: paged
@@ -48,7 +48,11 @@ if (!dir.exists("tables")) dir.create("tables")
 ## Metadata
 
 ```{r}
-experiments <- read_excel(file.path("data", "metadata.xlsx"))
+experiments <- read_excel(file.path("data", "metadata.xlsx")) %>%
+  # units adjustment for paper guidelines (space before all units)
+  mutate(
+    `C source` = str_replace_all(`C source`, "g/L", " g/L")
+  )
 ```
 
 ## Growth rates
@@ -191,7 +195,7 @@ chroms_norm_tidy <-
 
 ```{r}
 # base_plot
-C_source_levels <- str_replace(unique(sort(growth_rates$`C source`)), "30g", "\n30g")
+C_source_levels <- str_replace(unique(sort(growth_rates$`C source`)), "30 g", "\n30 g")
 
 base_plot <- 
   ggplot() +
@@ -228,16 +232,16 @@ gr_plot_data <-
   ) %>%
   arrange(desc(`% O2`), `C source`) %>%
   mutate(
-    `C source` = factor(str_replace(`C source`, "30g", "\n30g"), levels = C_source_levels),
+    `C source` = factor(str_replace(`C source`, "30 g", "\n30 g"), levels = C_source_levels),
     category = "A: growth rates",
-    O2 = sprintf("$%.0f%%\\,O_2$", `% O2`) %>% as_factor(),
+    O2 = sprintf("$%.0f\\,%%\\,O_2$", `% O2`) %>% as_factor(),
   )
 
 gr_plot <- 
   base_plot %+% gr_plot_data %+%
   aes(y = r.1_d_mean, shape = `C source`, ymin = r.1_d_mean - r.1_d_sd, ymax = r.1_d_mean + r.1_d_sd) + 
   geom_errorbar(width = 0) + 
-  scale_y_continuous(NULL, labels = function(x) paste0(x, "/hr")) +
+  scale_y_continuous(NULL, labels = function(x) paste0(x, " / hr")) +
   facet_grid(category ~ O2, labeller = latex_labeller) +
   theme(legend.key.height = unit(1, "cm")) + 
   labs(shape = NULL) +
@@ -258,8 +262,8 @@ ab_plot_data <-
     str_detect(compound, "br") | compound %in% c("iC15:0", "C16:0", "iDA")
   ) %>%
   mutate(
-    `C source` = factor(str_replace(`C source`, "30g", "\n30g"), levels = C_source_levels),
-    O2 = sprintf("$%.0f%%\\,O_2$", `% O2`) %>% as_factor(),
+    `C source` = factor(str_replace(`C source`, "30 g", "\n30 g"), levels = C_source_levels),
+    O2 = sprintf("$%.0f\\,%%\\,O_2$", `% O2`) %>% as_factor(),
     compound = factor(
       compound,
       levels = c("brGTGT_1a", "brGDGT_1c_isomer", "brGDGT_1a", "iC15:0", "C16:0", "iDA"),
@@ -277,7 +281,9 @@ brgdgt_ab_plot <-
     position = position_dodge(width = 0.9, preserve = "single"), width = 0, color = "black"
   ) +
   facet_grid(category ~ O2, scales = "free_y", labeller = latex_labeller, drop = FALSE) +
-  scale_y_continuous(NULL, breaks = c(0.005, 0.015, 0.025), expand = expansion(mult = c(0, 0.03)), labels = scales::percent) +
+  scale_y_continuous(
+    NULL, breaks = c(0.005, 0.015, 0.025), expand = expansion(mult = c(0, 0.03)), 
+    labels = function(x) paste0(100*x, " %")) +
   scale_fill_manual(NULL, values = c("#009E73", "#0072B2", "#E69F00"))
 
 brgdgt_ab_plot
@@ -296,7 +302,9 @@ fames_ab_plot <-
      position = position_dodge(width = 0.9, preserve = "single"), width = 0, color = "black"
   ) +
   facet_grid(category ~ O2, scales = "free_y", labeller = latex_labeller, switch = "x") +
-  scale_y_continuous(NULL, breaks = c(0.1, 0.3, 0.5, 0.7), expand = expansion(mult = c(0, 0.03)), labels = scales::percent) +
+  scale_y_continuous(
+    NULL, breaks = c(0.1, 0.3, 0.5, 0.7), expand = expansion(mult = c(0, 0.03)), 
+    labels = function(x) paste0(100*x, " %")) +
   scale_fill_manual(NULL, values = c("#FCDE05", "#FF5473", "#A696FF"))
 
 fames_ab_plot
@@ -400,7 +408,7 @@ spectra_plot_without_labels <-
   # scales
   scale_color_identity(drop = FALSE) +
   scale_x_continuous(expand = c(0, 0), breaks = (0:10)*100) +
-  scale_y_continuous(labels = function(x) paste0(100*x, "%")) +
+  scale_y_continuous(labels = function(x) paste0(100*x, " %")) +
   coord_cartesian(ylim = c(0.01, max_y)) +
   # facet
   facet_grid(compound ~ .) +
@@ -552,12 +560,12 @@ ggplot() +
   aes(x = time.hours/24, y = OD, color = replicate) +
   geom_line(
     data = generate_logistic_curve(growth_rates, time = time.hours, N = OD) %>%
-       mutate(panel = sprintf("%s: %.0f%% O2\n%s", bug_ID, `% O2`, `C source`) %>% as_factor())
+       mutate(panel = sprintf("%s: %.0f %% O2\n%s", bug_ID, `% O2`, `C source`) %>% as_factor())
   ) +
   geom_point(
     data = growth_curves_tidy %>%
       left_join(experiments, by = c("bug_ID", "exp_ID")) %>%
-      mutate(panel = sprintf("%s: %.0f%% O2\n%s", bug_ID, `% O2`, `C source`) %>% as_factor())
+      mutate(panel = sprintf("%s: %.0f %% O2\n%s", bug_ID, `% O2`, `C source`) %>% as_factor())
   ) + 
   scale_color_brewer(palette = "Set1") +
   facet_wrap(~panel, scales = "free") +
