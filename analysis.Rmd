@@ -582,17 +582,23 @@ ggplot() +
 lipids_table <- 
   lipids %>%
   arrange(desc(`% O2`), `C source`, replicate) %>%
-  select(organism = bug_ID, `% O2`, `C source`, replicate, compound, rel_amount) %>%
-  pivot_wider(names_from = compound, values_from = rel_amount) %>%
+   mutate(
+    header = paste("%", compound),
+    rel_amount.percent = 100 * rel_amount
+  ) %>%
+  select(organism = bug_ID, `% O2`, `C source`, replicate, header, rel_amount.percent) %>%
+  pivot_wider(names_from = header, values_from = rel_amount.percent) %>%
   select(
     organism, `% O2`:replicate, 
-    `C8:0`, `C14:0`, `iso-C15:0` = `iC15:0`, `C15:0`, `C16:1`, `C16:0`, `iso-C17:0` = `iC17:0`, `C17:1`, 
-    `C17:0`, `C18:1`, `C18:0`, `C20:0`, `C22:0`, squalene, `iso-diabolic acid` = iDA,
-    `brGDGT Ia` = brGDGT_1a, `brGDGT Ic isomer` = brGDGT_1c_isomer, `brGTGT Ia` = brGTGT_1a,
-    everything()
+    `% C8:0`, `% C14:0`, `% iso-C15:0` = `% iC15:0`, `% C15:0`, 
+    `% C16:1`, `% C16:0`, `% iso-C17:0` = `% iC17:0`, `% C17:1`, 
+    `% C17:0`, `% C18:1`, `% C18:0`, `% C20:0`, `% C22:0`, 
+    `% squalene`, `% iso-diabolic acid` = `% iDA`,
+    `% brGDGT Ia` = `% brGDGT_1a`, `% brGDGT Ic isomer` = `% brGDGT_1c_isomer`, 
+    `% brGTGT Ia` = `% brGTGT_1a`, everything()
   ) %>%
   mutate(`% O2` = sprintf("%.0f", `% O2`))
-lipids_table %>% export_to_excel(file = "tables/table_S1.xlsx", dbl_format = "PERCENTAGE")
+lipids_table %>% export_to_excel(file = "tables/table_S1.xlsx")
 lipids_table %>% knitr::kable()
 ```
 
