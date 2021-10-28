@@ -222,7 +222,7 @@ base_plot <-
 # growth rates
 gr_plot_data <- 
   growth_rates %>%
-  filter(near(`% O2`, 1) | near(`% O2`, 21)) %>%
+  filter(bug_ID == "e.agg" & (near(`% O2`, 1) | near(`% O2`, 21))) %>%
   group_by(`% O2`, `C source`) %>%
   summarize(
     n = sum(r),
@@ -284,7 +284,7 @@ brgdgt_ab_plot <-
   scale_y_continuous(
     NULL, breaks = c(0.005, 0.015, 0.025), expand = expansion(mult = c(0, 0.03)), 
     labels = function(x) paste0(100*x, " %")) +
-  scale_fill_manual(NULL, values = c("#009E73", "#0072B2", "#E69F00"))
+  scale_fill_manual(values = c("#009E73", "#0072B2", "#E69F00"))
 
 brgdgt_ab_plot
 ```
@@ -305,7 +305,7 @@ fames_ab_plot <-
   scale_y_continuous(
     NULL, breaks = c(0.1, 0.3, 0.5, 0.7), expand = expansion(mult = c(0, 0.03)), 
     labels = function(x) paste0(100*x, " %")) +
-  scale_fill_manual(NULL, values = c("#FCDE05", "#FF5473", "#A696FF"))
+  scale_fill_manual(values = c("#FCDE05", "#FF5473", "#A696FF"))
 
 fames_ab_plot
 ```
@@ -340,9 +340,16 @@ fames_ab_plot_bottom <-
   )
 
 plot_grid(
-  gr_plot_top + geom_point(size = 4, color = "black"), 
-  brgdgt_ab_plot_middle, fames_ab_plot_bottom, 
-  align = "v", ncol = 1, axis = "lr", rel_heights = c(0.9, 1, 1.2)
+  gr_plot_top + geom_point(size = 4, color = "black") + 
+    labs(shape = "A: growth rates") + 
+    theme(strip.background.y = element_blank(), strip.text.y = element_blank()), 
+  brgdgt_ab_plot_middle + 
+    labs(fill = "B: tetraethers") + 
+    theme(strip.background.y = element_blank(), strip.text.y = element_blank()), 
+  fames_ab_plot_bottom + 
+    labs(fill = "C: FAMEs") + 
+    theme(strip.background.y = element_blank(), strip.text.y = element_blank()), 
+  align = "v", ncol = 1, axis = "lr", rel_heights = c(1.15, 0.95, 1.2)
 )
 ```
 
