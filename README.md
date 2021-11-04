@@ -2,7 +2,7 @@
 
 # Halamka et al. (2021) supplemental
 
-This repository holds all data and supplementary source code needed to reproduce the calculations and plots of Halamka et al. (full citation will follow once published).
+This repository holds all data and supplementary source code needed to reproduce the calculations and plots of *Halamka, T.A., McFarlin, J.M., Younkin, A.D., Depoy, J., Dildar, N., Kopf, S.H. (2021) Oxygen limitation can trigger the production of branched GDGTs in culture. Geochemical Perspectives Letters 19, 36–39.*
 
 ## What can I do with this code? <a href="https://creativecommons.org/licenses/by/4.0/"><img src="https://mirrors.creativecommons.org/presskit/buttons/88x31/png/by.png" align = "right" width = "100"/></a>
 
