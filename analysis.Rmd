@@ -33,7 +33,7 @@ source(file.path("scripts", "table_functions.R"))
 # Global Knitting options
 knitr::opts_chunk$set(
   echo = TRUE, # switch to FALSE to avoid code blocks from displaying
-  dev = c("png", "pdf"), fig.keep = "all",
+  dev = c("png", "pdf" , "postscript"), fig.keep = "all",
   dev.args = list(pdf = list(encoding = "WinAnsi", useDingbats = FALSE)),
   fig.path = file.path("figures", "")
 )
@@ -241,7 +241,7 @@ gr_plot <-
   base_plot %+% gr_plot_data %+%
   aes(y = r.1_d_mean, shape = `C source`, ymin = r.1_d_mean - r.1_d_sd, ymax = r.1_d_mean + r.1_d_sd) + 
   geom_errorbar(width = 0) + 
-  scale_y_continuous(NULL, labels = function(x) paste0(x, " / hr")) +
+  scale_y_continuous(NULL, labels = function(x) paste0(x, " / day")) +
   facet_grid(category ~ O2, labeller = latex_labeller) +
   theme(legend.key.height = unit(1, "cm")) + 
   labs(shape = NULL) +
@@ -319,7 +319,10 @@ gr_plot_top <- gr_plot +
   theme(
     axis.text.x = element_blank(), 
     axis.title.x = element_blank(), 
-    axis.ticks.x = element_blank()
+    axis.ticks.x = element_blank(),
+    legend.title = element_text(face = "bold"),
+    axis.text = element_text(face = "bold"),
+    strip.text = element_text(face = "bold")
   )
 
 brgdgt_ab_plot_middle <- 
@@ -329,25 +332,29 @@ brgdgt_ab_plot_middle <-
     axis.title.x = element_blank(), 
     axis.ticks.x = element_blank(),
     strip.background.x = element_blank(), 
-    strip.text.x = element_blank()
+    strip.text.x = element_blank(),
+    legend.title = element_text(face = "bold"),
+    axis.text = element_text(face = "bold")
   )
 
 fames_ab_plot_bottom <-
   fames_ab_plot +
   theme(
     strip.background.x = element_blank(), 
-    strip.text.x = element_blank()
+    strip.text.x = element_blank(),
+    legend.title = element_text(face = "bold"),
+    axis.text = element_text(face = "bold")
   )
 
 plot_grid(
   gr_plot_top + geom_point(size = 4, color = "black") + 
-    labs(shape = "A: growth rates") + 
+    labs(shape = "a: growth rates") + 
     theme(strip.background.y = element_blank(), strip.text.y = element_blank()), 
   brgdgt_ab_plot_middle + 
-    labs(fill = "B: tetraethers") + 
+    labs(fill = "b: tetraethers") + 
     theme(strip.background.y = element_blank(), strip.text.y = element_blank()), 
   fames_ab_plot_bottom + 
-    labs(fill = "C: FAMEs") + 
+    labs(fill = "c: FAMEs") + 
     theme(strip.background.y = element_blank(), strip.text.y = element_blank()), 
   align = "v", ncol = 1, axis = "lr", rel_heights = c(1.15, 0.95, 1.2)
 )
